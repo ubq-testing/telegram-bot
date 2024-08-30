@@ -1,55 +1,107 @@
-import * as core from "@actions/core";
-import * as github from "@actions/github";
-import { Octokit } from "@octokit/rest";
-import { Value } from "@sinclair/typebox/value";
-import { envSchema, pluginSettingsSchema, PluginInputs, pluginSettingsValidator } from "./types";
-import { plugin } from "./plugin";
+#!/usr/bin/env tsx
 
-/**
- * How a GitHub action executes the plugin.
- */
-export async function run() {
-  const payload = github.context.payload.inputs;
+import process from 'node:process'
+import { type RunnerHandle, run } from '@grammyjs/runner'
+import { logger } from '#root/logger.js'
+import { createBot } from '#root/bot/index.js'
+import { createServer } from '#root/server/index.js'
+import { Context } from './types'
 
-  const env = Value.Decode(envSchema, payload.env);
-  const settings = Value.Decode(pluginSettingsSchema, Value.Default(pluginSettingsSchema, JSON.parse(payload.settings)));
 
-  if (!pluginSettingsValidator.test(settings)) {
-    throw new Error("Invalid settings provided");
-  }
+// might be able to use this is in a workflow
+// async function startPolling(config: PollingConfig) {
+//   const bot = createBot(config.botToken, {
+//     config,
+//     logger,
+//   })
+//   let runner: undefined | RunnerHandle
 
-  const inputs: PluginInputs = {
-    stateId: payload.stateId,
-    eventName: payload.eventName,
-    eventPayload: JSON.parse(payload.eventPayload),
-    settings,
-    authToken: payload.authToken,
-    ref: payload.ref,
-  };
+//   // graceful shutdown
+//   onShutdown(async () => {
+//     logger.info('Shutdown')
+//     await runner?.stop()
+//   })
 
-  await plugin(inputs, env);
+//   await Promise.all([
+//     bot.init(),
+//     bot.api.deleteWebhook(),
+//   ])
 
-  return returnDataToKernel(inputs.authToken, inputs.stateId, {});
-}
+//   // start bot
+//   runner = run(bot, {
+//     runner: {
+//       fetch: {
+//         allowed_updates: config.botAllowedUpdates,
+//       },
+//     },
+//   })
 
-async function returnDataToKernel(repoToken: string, stateId: string, output: object) {
-  const octokit = new Octokit({ auth: repoToken });
-  await octokit.repos.createDispatchEvent({
-    owner: github.context.repo.owner,
-    repo: github.context.repo.repo,
-    event_type: "return_data_to_ubiquibot_kernel",
-    client_payload: {
-      state_id: stateId,
-      output: JSON.stringify(output),
-    },
-  });
-}
+//   logger.info({
+//     msg: 'Bot running...',
+//     username: bot.botInfo.username,
+//   })
+// }
 
-run()
-  .then((result) => {
-    core.setOutput("result", result);
+async function startWebhook(config: Context["env"]) {
+  const bot = createBot(config.BOT_TOKEN, {
+    config,
+    logger,
   })
-  .catch((error) => {
-    console.error(error);
-    core.setFailed(error);
-  });
+  const server = createServer({
+    bot,
+    config,
+    logger,
+  })
+  const serverManager = createServerManager(server, {
+    host: config.serverHost,
+    port: config.serverPort,
+  })
+
+  // graceful shutdown
+  onShutdown(async () => {
+    logger.info('Shutdown')
+    await serverManager.stop()
+  })
+
+  // to prevent receiving updates before the bot is ready
+  await bot.init()
+
+  // start server
+  const info = await serverManager.start()
+  logger.info({
+    msg: 'Server started',
+    url: info.url,
+  })
+
+  // set webhook
+
+  logger.info({
+    msg: 'Webhook was set',
+    url: config.botWebhook,
+  })
+}
+
+try {
+  if (config.isWebhookMode)
+    await startWebhook(config)
+  else if (config.isPollingMode)
+    await startPolling(config)
+}
+catch (error) {
+  logger.error(error)
+  process.exit(1)
+}
+
+// Utils
+
+function onShutdown(cleanUp: () => Promise<void>) {
+  let isShuttingDown = false
+  const handleShutdown = async () => {
+    if (isShuttingDown)
+      return
+    isShuttingDown = true
+    await cleanUp()
+  }
+  process.on('SIGINT', handleShutdown)
+  process.on('SIGTERM', handleShutdown)
+}
