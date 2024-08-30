@@ -1,3 +1,4 @@
+import { Update } from "@grammyjs/types";
 import { Context } from "./context";
 
 /**
@@ -9,6 +10,15 @@ import { Context } from "./context";
 /**
  * Restricts the scope of `context` to the `issue_comment.created` payload.
  */
-export function isIssueCommentEvent(context: Context): context is Context<"issue_comment.created"> {
-  return context.eventName === "issue_comment.created";
+export function isIssueOpenedEvent(context: Context): context is Context<"issues.opened"> {
+  return context.eventName === "issues.opened";
 }
+
+export function isTelegramPayload(payload: any): payload is Update {
+  return payload.update_id !== undefined;
+}
+
+export function isGithubPayload(payload: any): payload is Context["payload"] {
+  return payload.action !== undefined;
+}
+

@@ -15,6 +15,7 @@ interface Dependencies {
   logger: Logger
 }
 
+
 export function createServer(dependencies: Dependencies) {
   const {
     bot,
