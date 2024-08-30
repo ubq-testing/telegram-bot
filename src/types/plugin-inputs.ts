@@ -24,6 +24,7 @@ export const pluginSettingsSchema = T.Object({
    * The bot must be an admin and have rights to manage topics.
    */
   supergroupChatId: T.Integer(),
+  supergroupChatName: T.String(),
 });
 
 export const pluginSettingsValidator = new StandardValidator(pluginSettingsSchema);

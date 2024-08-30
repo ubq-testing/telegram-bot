@@ -1,6 +1,6 @@
 import { Composer } from 'grammy'
 import type { Context } from '#root/bot/context.js'
-import { PluginContext } from '#root/utils/plugin-context'
+import { PluginContext } from '#root/utils/plugin-context-single.js'
 
 const composer = new Composer<Context>()
 

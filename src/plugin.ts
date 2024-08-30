@@ -1,9 +1,8 @@
-import { Octokit } from "@octokit/rest";
 import { Env, PluginInputs } from "./types";
 import { Context } from "./types";
-import { LogLevel, Logs } from "@ubiquity-dao/ubiquibot-logger";
 import { isIssueOpenedEvent } from "./types/typeguards";
 import { createChatroom } from "./handlers/github/workrooms";
+import { PluginContext } from "./utils/plugin-context-single";
 
 /**
  * The main plugin function. Split for easier testing.
@@ -12,7 +11,7 @@ export async function runPlugin(context: Context) {
   const { logger, eventName } = context;
 
   if (isIssueOpenedEvent(context)) {
-    return createChatroom(context);
+    return await createChatroom(context);
   }
 
   logger.error(`Unsupported event: ${eventName}`);
@@ -22,15 +21,7 @@ export async function runPlugin(context: Context) {
  * How a worker executes the plugin.
  */
 export async function plugin(inputs: PluginInputs, env: Env) {
-  const octokit = new Octokit({ auth: inputs.authToken });
-
-  const context: Context = {
-    eventName: inputs.eventName,
-    payload: inputs.eventPayload,
-    config: inputs.settings,
-    octokit,
-    env,
-    logger: new Logs("info" as LogLevel),
-  };
+  PluginContext.initialize(inputs, env)
+  const context: Context = PluginContext.getInstance().getContext()
   return runPlugin(context);
 }
