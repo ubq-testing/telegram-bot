@@ -15,6 +15,8 @@ import { hydrateReply, parseMode } from '@grammyjs/parse-mode'
 import { i18n } from './i18n'
 import { adminFeature } from './features/admin'
 import { userIdFeature } from './features/user-id'
+import { createForumsFeature } from './features/workroom'
+import { chatIdFeature } from './features/chatid'
 
 interface Dependencies {
   config: UbiquityOsContext["env"]
@@ -57,13 +59,21 @@ export function createBot(token: string, dependencies: Dependencies, options: Op
   protectedBot.use(welcomeFeature)
   protectedBot.use(adminFeature)
   protectedBot.use(userIdFeature)
+  protectedBot.use(chatIdFeature)
+  protectedBot.use(createForumsFeature)
   // if (isMultipleLocales)
   // protectedBot.use(languageFeature)
 
   // // must be the last handler
   protectedBot.use(unhandledFeature)
 
-  return bot
+  Reflect.set(bot, 'getContext', createContextConstructor({ logger, config }))
+
+  return bot as typeof bot & {
+    getContext: () => Context
+  }
 }
 
-export type Bot = ReturnType<typeof createBot>
+export type Bot = ReturnType<typeof createBot> & {
+  getContext: () => Context
+}
